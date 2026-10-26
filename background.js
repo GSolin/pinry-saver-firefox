@@ -1,67 +1,83 @@
 // Pinry Saver Firefox Addon - Background Script
 
+// Saves waiting in a tag window, kept in session storage until saved or cancelled
+const PENDING_PREFIX = 'pending:';
+const PENDING_MAX_AGE_MS = 60 * 60 * 1000;
+
+const TAG_WINDOW_WIDTH = 440;
+const TAG_WINDOW_HEIGHT = 640;
+
 // Function to show HTML toast overlay
-async function showToast(message, type = 'info') {
+async function showToast(tabId, message, type = 'info') {
+  if (tabId === undefined || tabId < 0) {
+    console.log(`${type.toUpperCase()}: ${message}`);
+    return;
+  }
+
   try {
-    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
-    
-    // Inject the toast into the current page
-    await browser.tabs.executeScript(tab.id, {
+    await browser.tabs.executeScript(tabId, {
       code: `
-        // Remove any existing toast
-        const existingToast = document.getElementById('pinry-toast');
-        if (existingToast) {
-          existingToast.remove();
-        }
-        
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.id = 'pinry-toast';
-        
-        // Set background color based on type
-        const bgColor = '${type}' === 'success' ? '#4CAF50' : '#f44336';
-        
-        toast.style.cssText = \`
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          background: \${bgColor};
-          color: white;
-          padding: 16px 24px;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          z-index: 10000;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          font-size: 14px;
-          font-weight: 500;
-          max-width: 300px;
-          word-wrap: break-word;
-          opacity: 0;
-          transform: translateX(100%);
-          transition: all 0.3s ease;
-        \`;
-        toast.textContent = '${message}';
-        
-        // Add to page
-        document.body.appendChild(toast);
-        
-        // Animate in
-        setTimeout(() => {
-          toast.style.opacity = '1';
-          toast.style.transform = 'translateX(0)';
-        }, 10);
-        
-        // Auto remove after 3 seconds
-        setTimeout(() => {
-          toast.style.opacity = '0';
-          toast.style.transform = 'translateX(100%)';
+        (() => {
+          const message = ${JSON.stringify(String(message))};
+          const type = ${JSON.stringify(String(type))};
+
+          // Remove any existing toast
+          const existingToast = document.getElementById('pinry-toast');
+          if (existingToast) {
+            existingToast.remove();
+          }
+          if (!document.body) {
+            return;
+          }
+
+          // Create toast element
+          const toast = document.createElement('div');
+          toast.id = 'pinry-toast';
+
+          // Set background color based on type
+          const bgColor = type === 'success' ? '#4CAF50' : '#f44336';
+
+          toast.style.cssText = \`
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: \${bgColor};
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 2147483647;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            max-width: 300px;
+            word-wrap: break-word;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+          \`;
+          toast.textContent = message;
+
+          // Add to page
+          document.body.appendChild(toast);
+
+          // Animate in
           setTimeout(() => {
-            if (toast.parentNode) {
-              toast.remove();
-            }
-          }, 300);
-        }, 3000);
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+          }, 10);
+
+          // Auto remove after 3 seconds
+          setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+              if (toast.parentNode) {
+                toast.remove();
+              }
+            }, 300);
+          }, 3000);
+        })();
       `
     });
   } catch (error) {
@@ -85,146 +101,110 @@ browser.runtime.onInstalled.addListener((details) => {
   }
 });
 
-// Handle messages from content scripts or popup
-browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  switch (request.action) {
-    case 'getCurrentTab':
-      getCurrentTab().then(sendResponse);
-      return true; // Keep message channel open for async response
-    
-    case 'shareToPinry':
-      shareToPinry(request.data).then(sendResponse);
-      return true;
-    
-    default:
-      console.log('Unknown action:', request.action);
+// Reads the alt and title of the right-clicked image from the page
+async function getImageMetadata(info, tab) {
+  if (!tab || tab.id === undefined || tab.id < 0) {
+    return null;
   }
-});
 
-async function getCurrentTab() {
   try {
-    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-    return { success: true, tab: tabs[0] };
-  } catch (error) {
-    console.error('Error getting current tab:', error);
-    return { success: false, error: error.message };
-  }
-}
+    const results = await browser.tabs.executeScript(tab.id, {
+      frameId: info.frameId || 0,
+      code: `
+        (() => {
+          try {
+            const targetElementId = ${JSON.stringify(info.targetElementId ?? null)};
+            const srcUrl = ${JSON.stringify(info.srcUrl)};
+            let targetImage = null;
 
-async function extractEnhancedDescription(info, tab) {
-  const parts = [];
-  
-  try {
-    // Try to extract domain from page URL (robust handling)
-    let domain = null;
-    if (tab && tab.url) {
-      try {
-        const pageUrl = new URL(tab.url);
-        domain = pageUrl.hostname;
-      } catch (urlError) {
-        console.log('Invalid page URL:', tab.url);
-      }
-    }
-    
-    // Try to get image metadata from the page (only if we have a valid tab)
-    let imageMetadata = null;
-    if (tab && tab.id && info.srcUrl) {
-      try {
-        imageMetadata = await browser.tabs.executeScript(tab.id, {
-          code: `
-            try {
-              // Find the image element that was right-clicked
-              const images = document.querySelectorAll('img');
-              let targetImage = null;
-              
-              for (const img of images) {
-                if (img.src === '${info.srcUrl}' || img.currentSrc === '${info.srcUrl}') {
+            const menusApi = typeof browser !== 'undefined' && (browser.menus || browser.contextMenus);
+            if (targetElementId !== null && menusApi && menusApi.getTargetElement) {
+              const element = menusApi.getTargetElement(targetElementId);
+              if (element && element.tagName === 'IMG') {
+                targetImage = element;
+              }
+            }
+
+            if (!targetImage) {
+              for (const img of document.querySelectorAll('img')) {
+                if (img.src === srcUrl || img.currentSrc === srcUrl) {
                   targetImage = img;
                   break;
                 }
               }
-              
-              // Extract alt and title attributes (handle null/undefined)
-              let altText = '';
-              let titleText = '';
-              
-              if (targetImage) {
-                altText = targetImage.getAttribute('alt') || '';
-                titleText = targetImage.getAttribute('title') || '';
-              }
-              
-              // Return the metadata
-              JSON.stringify({
-                alt: altText,
-                title: titleText,
-                found: !!targetImage
-              });
-            } catch (e) {
-              JSON.stringify({
-                alt: '',
-                title: '',
-                found: false,
-                error: e.message
-              });
             }
-          `
-        });
-      } catch (scriptError) {
-        console.log('Could not execute script to extract image metadata:', scriptError);
-      }
-    }
-    
-    // Process image metadata if available
-    if (imageMetadata && imageMetadata[0]) {
+
+            return JSON.stringify({
+              alt: targetImage ? (targetImage.getAttribute('alt') || '') : '',
+              title: targetImage ? (targetImage.getAttribute('title') || '') : '',
+              found: !!targetImage
+            });
+          } catch (e) {
+            return JSON.stringify({ alt: '', title: '', found: false, error: e.message });
+          }
+        })();
+      `
+    });
+    return results && results[0] ? JSON.parse(results[0]) : null;
+  } catch (scriptError) {
+    console.log('Could not execute script to extract image metadata:', scriptError);
+    return null;
+  }
+}
+
+async function extractEnhancedDescription(info, tab, pageUrl) {
+  const parts = [];
+
+  try {
+    // Try to extract domain from page URL (robust handling)
+    let domain = null;
+    if (pageUrl) {
       try {
-        const metadata = JSON.parse(imageMetadata[0]);
-        
-        // Add alt text if available and not empty
-        if (metadata.alt && typeof metadata.alt === 'string' && metadata.alt.trim()) {
-          parts.push(metadata.alt.trim());
-        }
-        
-        // Add title text if available, different from alt, and not empty
-        if (metadata.title && 
-            typeof metadata.title === 'string' && 
-            metadata.title.trim() && 
-            metadata.title.trim() !== metadata.alt?.trim()) {
-          parts.push(metadata.title.trim());
-        }
-      } catch (parseError) {
-        console.log('Error parsing image metadata:', parseError);
+        domain = new URL(pageUrl).hostname;
+      } catch (urlError) {
+        console.log('Invalid page URL:', pageUrl);
       }
     }
-    
+
+    // Try to get image metadata from the page
+    const metadata = await getImageMetadata(info, tab);
+
+    if (metadata) {
+      // Add alt text if available and not empty
+      if (metadata.alt && typeof metadata.alt === 'string' && metadata.alt.trim()) {
+        parts.push(metadata.alt.trim());
+      }
+
+      // Add title text if available, different from alt, and not empty
+      if (metadata.title &&
+          typeof metadata.title === 'string' &&
+          metadata.title.trim() &&
+          metadata.title.trim() !== metadata.alt?.trim()) {
+        parts.push(metadata.title.trim());
+      }
+    }
+
     // Add domain if available
     if (domain) {
       parts.push(`Source: ${domain}`);
     }
-    
+
     // Return description or fallback
     if (parts.length > 0) {
       return parts.join(' | ');
     } else {
       // Ultimate fallback - use image filename or generic text
-      if (info.srcUrl) {
-        try {
-          const imageUrl = new URL(info.srcUrl);
-          const filename = imageUrl.pathname.split('/').pop();
-          if (filename && filename.includes('.')) {
-            return `Image: ${filename}`;
-          }
-        } catch (e) {
-          // URL parsing failed, use the last part of the path
-          const pathParts = info.srcUrl.split('/');
-          const lastPart = pathParts[pathParts.length - 1];
-          if (lastPart && lastPart.includes('.')) {
-            return `Image: ${lastPart}`;
-          }
+      try {
+        const filename = new URL(info.srcUrl).pathname.split('/').pop();
+        if (filename && filename.includes('.')) {
+          return `Image: ${filename}`;
         }
+      } catch (e) {
+        // URL parsing failed, fall through to the generic text
       }
       return 'Saved image';
     }
-    
+
   } catch (error) {
     console.error('Error extracting enhanced description:', error);
     // Return a basic fallback
@@ -232,56 +212,67 @@ async function extractEnhancedDescription(info, tab) {
   }
 }
 
-async function shareToPinry(pinData) {
-  try {
-    const settings = await browser.storage.sync.get(['pinryUrl', 'apiKey']);
-    
-    if (!settings.pinryUrl || !settings.apiKey) {
-      return { success: false, error: 'Pinry URL and API key must be configured' };
-    }
-
-    const apiUrl = `${settings.pinryUrl}/api/v2/pins/`;
-    
-    console.log('Sending to Pinry:', {
-      url: apiUrl,
-      data: pinData
-    });
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Token ${settings.apiKey}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(pinData)
-    });
-
-    console.log('Pinry response:', {
-      status: response.status,
-      statusText: response.statusText
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      return { success: true, data: result };
-    } else {
-      const errorText = await response.text();
-      console.log('Error response body:', errorText);
-      return { 
-        success: false, 
-        error: `HTTP ${response.status}: ${response.statusText}`,
-        details: errorText
-      };
-    }
-  } catch (error) {
-    console.error('Error sharing to Pinry:', error);
-    return { success: false, error: error.message };
+// Drop pending saves whose tag window was closed without saving or cancelling
+async function prunePendingSaves() {
+  const all = await browser.storage.session.get(null);
+  const stale = Object.keys(all).filter((key) =>
+    key.startsWith(PENDING_PREFIX) &&
+    !(all[key] && Date.now() - all[key].createdAt < PENDING_MAX_AGE_MS)
+  );
+  if (stale.length > 0) {
+    await browser.storage.session.remove(stale);
   }
 }
 
-// Create context menu on addon installation
-browser.runtime.onInstalled.addListener(() => {
+// Open the tag window for a pending save, centred over the current window
+async function openTagWindow(pendingId) {
+  const options = {
+    url: browser.runtime.getURL(`tags.html?id=${encodeURIComponent(pendingId)}`),
+    type: 'popup',
+    width: TAG_WINDOW_WIDTH,
+    height: TAG_WINDOW_HEIGHT
+  };
+
+  try {
+    const current = await browser.windows.getLastFocused();
+    if (current && current.width && current.height) {
+      options.left = Math.max(0, Math.round(current.left + (current.width - TAG_WINDOW_WIDTH) / 2));
+      options.top = Math.max(0, Math.round(current.top + (current.height - TAG_WINDOW_HEIGHT) / 3));
+    }
+  } catch (e) {
+    // Firefox picks a position itself
+  }
+
+  await browser.windows.create(options);
+}
+
+// Saves straight to Pinry when the tag window is turned off
+async function saveImmediately(tabId, settings, pinData) {
+  const allowed = await browser.permissions.contains({ origins: [pinryHostPattern(settings.pinryUrl)] });
+  if (!allowed) {
+    await showToast(tabId, `Pinry Saver can't reach ${new URL(settings.pinryUrl).host} yet. Open its settings and click Save Settings to allow access.`, 'error');
+    return;
+  }
+
+  const result = await shareToPinry(settings, pinData);
+  if (!result.success) {
+    await showToast(tabId, describeSaveError(result), 'error');
+    return;
+  }
+
+  if (settings.defaultBoardId) {
+    const boardResult = await addPinToBoard(settings, settings.defaultBoardId, result.data.id);
+    if (!boardResult.success) {
+      await showToast(tabId, `Saved to Pinry, but couldn't add it to board ${settings.defaultBoardId}.`, 'error');
+      return;
+    }
+  }
+
+  await showToast(tabId, 'Successfully saved image to Pinry!', 'success');
+}
+
+// Create the context menu each time the background page starts
+browser.contextMenus.removeAll().then(() => {
   browser.contextMenus.create({
     id: 'save-to-pinry',
     title: 'Save to Pinry',
@@ -294,71 +285,58 @@ browser.runtime.onInstalled.addListener(() => {
 });
 
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'save-to-pinry') {
-    try {
-      const settings = await browser.storage.sync.get(['pinryUrl', 'apiKey', 'defaultBoardId']);
-      
-      if (!settings.pinryUrl || !settings.apiKey) {
-        await showToast('Please configure Pinry URL and API key in the addon settings first.', 'error');
-        return;
-      }
+  if (info.menuItemId !== 'save-to-pinry') {
+    return;
+  }
 
-      // Right-clicked on an image
-      if (info.srcUrl) {
-        const imageUrl = info.srcUrl;
-        
-        console.log('Saving image to Pinry:', imageUrl);
-        
-        // Extract enhanced description with image metadata and page domain
-        const description = await extractEnhancedDescription(info, tab);
-        
-        const pinData = {
-          url: imageUrl,
-          description: description,
-          tags: []
-        };
+  const tabId = tab ? tab.id : undefined;
 
-        // Add board ID if specified
-        if (settings.defaultBoardId) {
-          pinData.board = settings.defaultBoardId;
-        }
+  try {
+    const settings = await getPinrySettings();
 
-        const result = await shareToPinry(pinData);
-        
-        if (result.success) {
-          await showToast('Successfully saved image to Pinry!', 'success');
-        } else {
-          // Better error handling - show user-friendly messages
-          let errorMessage = 'Failed to save image';
-          
-          if (result.details) {
-            // Parse the error details for better user feedback
-            try {
-              const errorData = JSON.parse(result.details);
-              if (errorData['url-or-image']) {
-                errorMessage = 'Invalid image URL - try a different image';
-              } else if (result.details.includes('NOT NULL constraint failed')) {
-                errorMessage = 'Image processing failed - try a different image';
-              } else if (result.details.includes('IntegrityError')) {
-                errorMessage = 'Image format not supported - try a different image';
-              }
-            } catch (e) {
-              // If we can't parse the error, use the basic message
-              errorMessage = result.error || 'Unknown error occurred';
-            }
-          } else {
-            errorMessage = result.error || 'Unknown error occurred';
-          }
-          
-          await showToast(errorMessage, 'error');
-        }
-      } else {
-        // Not an image - show message
-        await showToast('Please right-click on an image to save it to Pinry.', 'error');
-      }
-    } catch (error) {
-      console.error('Error in context menu:', error);
-      await showToast('An error occurred while saving to Pinry.', 'error');
+    if (!settings.pinryUrl || !settings.apiKey) {
+      await showToast(tabId, 'Please configure Pinry URL and API key in the addon settings first.', 'error');
+      return;
     }
+
+    if (!info.srcUrl) {
+      await showToast(tabId, 'Please right-click on an image to save it to Pinry.', 'error');
+      return;
+    }
+
+    if (!isWebUrl(info.srcUrl)) {
+      await showToast(tabId, 'This image is embedded in the page (no web address), so Pinry can\'t download it.', 'error');
+      return;
+    }
+
+    // The page the image was found on, stored as the pin's source link
+    const pageUrl = [info.pageUrl, tab && tab.url].find(isWebUrl) || null;
+
+    console.log('Preparing Pinry save:', info.srcUrl, 'from', pageUrl);
+
+    // Extract enhanced description with image metadata and page domain
+    const description = await extractEnhancedDescription(info, tab, pageUrl);
+
+    if (!settings.showTagWindow) {
+      await saveImmediately(tabId, settings, buildPinData(info.srcUrl, description, pageUrl, []));
+      return;
+    }
+
+    await prunePendingSaves();
+    const pendingId = crypto.randomUUID();
+    await browser.storage.session.set({
+      [PENDING_PREFIX + pendingId]: {
+        createdAt: Date.now(),
+        imageUrl: info.srcUrl,
+        pageUrl: pageUrl,
+        description: description
+      }
+    });
+
+    // The tag window finishes the save (tags.js)
+    await openTagWindow(pendingId);
+  } catch (error) {
+    console.error('Error in context menu:', error);
+    await showToast(tabId, 'An error occurred while saving to Pinry.', 'error');
   }
 });

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Save to Pinry</title>
+  <link rel="stylesheet" href="tags.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">
+      <img src="icons/pinry_saver_bitmap_icon.png" alt="" class="title-icon">
+      Save to Pinry
+    </h1>
+
+    <div class="preview" id="preview" hidden>
+      <img id="previewImage" alt="The image being saved">
+    </div>
+
+    <dl class="details">
+      <dt>From</dt>
+      <dd id="source">-</dd>
+    </dl>
+
+    <label for="description" class="field-label">Description</label>
+    <textarea id="description" class="description-input" rows="2"></textarea>
+
+    <label for="tagInput" class="field-label">Tags</label>
+    <div class="tag-field">
+      <div class="tag-box" id="tagBox">
+        <ul class="tag-list" id="tagList" aria-label="Tags to add"></ul>
+        <input type="text" id="tagInput" autocomplete="off" maxlength="100"
+               placeholder="Type a tag, then Enter"
+               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
+      </div>
+      <ul class="suggestions" id="suggestions" role="listbox" aria-label="Existing tags" hidden></ul>
+    </div>
+
+    <div class="actions">
+      <button id="cancel" class="btn btn-secondary">Cancel</button>
+      <button id="save" class="btn btn-primary">Save</button>
+    </div>
+
+    <p id="status" class="status" role="status"></p>
+  </div>
+
+  <script src="pinry-client.js"></script>
+  <script src="tags.js"></script>
+</body>
+</html>

@@ -1,89 +1,82 @@
 # Pinry Saver - Firefox Addon
 
-A Firefox browser extension for saving images directly to your Pinry instance with a clean, modern interface.
+A Firefox browser extension for saving images from any web page to your [Pinry](https://github.com/pinry/pinry) instance, with tags and a link back to the page they came from.
 
-Install the add-on: https://addons.mozilla.org/en-US/firefox/addon/pinry-saver/
+This is a fork of [sciamop/pinry-saver-firefox](https://github.com/sciamop/pinry-saver-firefox) (1.0.1 on addons.mozilla.org). It's purpose is to fix a number of security issues and bugs; as well as adding additional features. See [CHANGELOG.md](CHANGELOG.md) for the full list.
 
 ## Features
 
-- **Right-Click Image Sharing**: Right-click on any image to save it to Pinry
-- **Context Menu Integration**: Clean context menu option for images only
-- **Settings Management**: Configure your Pinry server URL, API key, and optional default board ID
-- **Toast Notifications**: Beautiful HTML overlay notifications for success/error feedback
-- **Modern UI**: Clean, responsive interface with Pinry Saver branding and magenta color scheme
-- **Fully Rounded Design**: 100% rounded corners on all form elements and buttons
+- **Right-Click Image Saving**: Right-click any image and choose "Save to Pinry"
+- **Tag Window** (optional): Add tags before saving, with suggestions from the tags already in your Pinry
+- **Source Links**: Each pin links back to the page the image was found on
+- **Default Board**: Optionally add every new pin to a board
+- **Minimal Permissions**: Access to your Pinry server only, requested when you set it up
+- **Toast Notifications**: HTML overlay notifications on the page you saved from
+
+## Requirements
+
+- Firefox 115 or later
+- A Pinry 2.x server with API v2 (the default)
+- A Pinry API token: log in to Pinry, open your profile, and copy the token
 
 ## Installation
 
-1. Open Firefox and navigate to `about:debugging`
-2. Click "This Firefox" in the sidebar
-3. Click "Load Temporary Add-on"
+1. Download or clone this repository
+2. Open Firefox and go to `about:debugging#/runtime/this-firefox`
+3. Click "Load Temporary Add-on…"
 4. Select the `manifest.json` file from this directory
+
+A temporary add-on stays until Firefox restarts. Your settings are kept between loads.
 
 ## Setup
 
 1. Click the Pinry Saver icon in your toolbar
-2. Configure your settings:
-   - **Pinry Server URL**: Your Pinry instance URL (e.g., `https://your-pinry.com`)
-   - **API Key**: Your Pinry API token (found in your Pinry settings)
-   - **Default Board ID** (optional): Set a default board for saving images
+2. Enter your settings:
+   - **Pinry Server URL**: Your Pinry instance, e.g. `https://pinry.example.com`
+   - **API Key**: Your Pinry API token
+   - **Default Board ID** (optional): The number at the end of a board's address
+3. Click "Save Settings", then allow access to your Pinry server when Firefox asks
+4. Optionally tick **Add tags before saving** to open the tag window on each save. It's saved as soon as you tick it
+
+`http://` servers work too, but the API key is then sent unencrypted. Use `https://` for anything outside your home network.
 
 ## Usage
 
-### Right-Click Image Sharing
-1. Right-click on any image on a webpage
-2. Select "Save to Pinry" from the context menu
-3. The image will be saved to your Pinry instance
-4. You'll see a toast notification confirming the save or showing any errors
+1. Right-click an image on a web page
+2. Select "Save to Pinry"
 
-### Settings Configuration
-1. Click the Pinry Saver icon in your toolbar
-2. Enter your Pinry URL and API key
-3. Optionally set a default board ID for automatic board assignment
-4. Click "Save Settings" to store your configuration
+With **Add tags before saving** off (the default), the image is saved straight away and a notification on the page confirms it.
 
-## API Requirements
+With it on, a tag window opens first:
+- **Enter** or **comma** adds a tag; **Tab** completes an existing one (**↑/↓** to choose which)
+- **Backspace** on an empty box removes the last tag
+- **Enter** on an empty box (or **Ctrl+Enter**, or click Save) saves. **Esc** cancels
 
-This addon requires:
-- Pinry instance with API v2 enabled
-- Valid API token with write permissions
-- CORS configured to allow requests from browser extensions
-
-**Pinry Project**: [https://github.com/pinry/pinry](https://github.com/pinry/pinry)
-
-## Technical Details
-
-### Features
-- **Image-Only Focus**: Designed specifically for saving images via right-click context menu
-- **Toast Notifications**: Custom HTML overlay notifications instead of browser notifications
-- **Settings Persistence**: Uses Firefox storage API to save configuration
-- **Error Handling**: Comprehensive error handling with user-friendly messages
-- **Branding**: Uses Pinry Saver branding with magenta color scheme (#FF42FF)
-
-### UI Design
-- **Header**: Centered 128x128px Pinry icon over gradient background
-- **Form Elements**: 100% rounded corners on all inputs and buttons
-- **Hover Effects**: Glow effect on button hover (no text movement)
-- **Responsive**: Clean, modern interface that works on all screen sizes
+Pinry downloads the image itself, so images that only exist inside the page (`data:` or `blob:` addresses) can't be saved. Some sites block downloads; if a save fails, try opening the image on its own first.
 
 ## Development
 
 The addon is built with:
 - Manifest V2 (Firefox WebExtensions API)
 - Vanilla JavaScript (no external dependencies)
-- Modern CSS with responsive design and custom properties
+
+Check it with [web-ext](https://github.com/mozilla/web-ext): `npx web-ext lint`, or `npx web-ext run` to start a Firefox with the add-on loaded.
 
 ### File Structure
 ```
 ├── manifest.json      # Addon configuration
-├── popup.html         # Settings-only popup interface
-├── popup.css          # Styling with magenta theme and rounded design
-├── popup.js           # Settings management functionality
-├── background.js      # Background script, context menu, and API calls
-├── content.js         # Content script for page interaction
-├── pinry-api.js       # Pinry API reference (for development)
-├── icons/             # Addon icons (16px, 32px, 48px, 128px)
-└── README.md          # This file
+├── background.js      # Context menu, image metadata, opens the tag window
+├── pinry-client.js    # Pinry API helpers shared by the scripts
+├── tags.html          # Tag window shown when saving
+├── tags.css
+├── tags.js
+├── popup.html         # Settings popup
+├── popup.css
+├── popup.js
+├── pinry-api.js       # Pinry API reference (not loaded by the addon)
+├── icons/
+├── CHANGELOG.md
+└── README.md
 ```
 
 ## License
@@ -92,4 +85,5 @@ MIT License - feel free to modify and distribute.
 
 ---
 
-**GitHub Repository**: [https://github.com/sciamop/pinry-saver-firefox](https://github.com/sciamop/pinry-saver-firefox)
+**GitHub Repository**: [https://github.com/GSolin/pinry-saver-firefox](https://github.com/GSolin/pinry-saver-firefox)
+**Original project**: [https://github.com/sciamop/pinry-saver-firefox](https://github.com/sciamop/pinry-saver-firefox) by sciamop

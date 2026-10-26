@@ -16,7 +16,7 @@
       <div class="form-section">
         <div class="form-group">
           <label for="pinryUrl">Pinry Server URL:</label>
-          <input type="url" id="pinryUrl" placeholder="https://your-pinry-instance.com">
+          <input type="url" id="pinryUrl" placeholder="https://pinry.example.com">
         </div>
         
         <div class="form-group">
@@ -28,20 +28,28 @@
           <label for="defaultBoardId">Default Board ID (optional):</label>
           <input type="text" id="defaultBoardId" placeholder="Leave empty to use default board">
         </div>
+
+        <div class="form-group form-toggle">
+          <input type="checkbox" id="showTagWindow">
+          <label for="showTagWindow">Add tags before saving</label>
+        </div>
       </div>
       
       <div class="actions">
         <button id="saveSettings" class="btn btn-primary">Save Settings</button>
       </div>
       
+      <div id="status" class="status" role="status"></div>
+      
       <div class="footer">
-        <a href="https://github.com/sciamop/pinry-saver-firefox" target="_blank" class="github-link">
+        <a href="https://github.com/GSolin/pinry-saver-firefox" target="_blank" class="github-link">
           View on GitHub
         </a>
       </div>
     </div>
   </div>
   
+  <script src="pinry-client.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

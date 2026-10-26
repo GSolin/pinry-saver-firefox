@@ -1,30 +1,37 @@
 {
   "manifest_version": 2,
   "name": "Pinry Saver",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Save web pages directly to your Pinry instance",
-  
-  "applications": {
+
+  "browser_specific_settings": {
     "gecko": {
-      "id": "pinry-saver@pinry.local"
+      "id": "pinry-saver@gsolin.github.io",
+      "strict_min_version": "115.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   },
-  
+
   "permissions": [
     "activeTab",
     "storage",
-    "notifications",
-    "contextMenus",
-    "https://*/*"
+    "contextMenus"
   ],
-  
+
+  "optional_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+
   "icons": {
     "16": "icons/pinry_saver_bitmap_icon.png",
     "32": "icons/pinry_saver_bitmap_icon.png",
     "48": "icons/pinry_saver_bitmap_icon.png",
     "128": "icons/pinry_saver_bitmap_icon.png"
   },
-  
+
   "browser_action": {
     "default_popup": "popup.html",
     "default_title": "Pinry Saver",
@@ -35,20 +42,9 @@
       "128": "icons/pinry_saver_bitmap_icon.png"
     }
   },
-  
+
   "background": {
-    "scripts": ["background.js"],
+    "scripts": ["pinry-client.js", "background.js"],
     "persistent": false
-  },
-  
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ],
-  
-  "web_accessible_resources": [
-    "icons/*.png"
-  ]
+  }
 }

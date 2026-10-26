@@ -90,6 +90,23 @@ body {
   min-height: 60px;
 }
 
+.form-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-toggle input {
+  width: auto;
+  margin: 0;
+  accent-color: #FF42FF;
+}
+
+.form-toggle label {
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
 .actions {
   display: flex;
   gap: 8px;
@@ -172,6 +189,12 @@ body {
 .loading {
   opacity: 0.6;
   pointer-events: none;
+}
+
+.status {
+  margin-top: 8px;
+  font-size: 12px;
+  min-height: 1em;
 }
 
 .success {
